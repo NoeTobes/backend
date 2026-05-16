@@ -6,51 +6,52 @@ import crypto from 'crypto';
 
 export class AccountModel {
     static async create(userData: RegisterRequest): Promise<any> {
-    const { title, firstName, lastName, email, password } = userData;
-    const passwordHash = await bcrypt.hash(password, 10);
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    
-    console.log('Generated verification token:', verificationToken);
-    
-    const [rows] = await pool.query('SELECT COUNT(*) as count FROM accounts');
-    const isFirstAccount = (rows as any)[0].count === 0;
-    const role = isFirstAccount ? 'Admin' : 'User';
-    
-    const [result] = await pool.query(
-        `INSERT INTO accounts 
-         (title, firstName, lastName, email, passwordHash, role, isVerified, verificationToken, twoFactorEnabled) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [title, firstName, lastName, email, passwordHash, role, false, verificationToken, false]
-    );
-    
-    const insertId = (result as any).insertId;
-    const account = await this.getById(insertId);
-    
-    return {
-        ...account,
-        verificationToken: verificationToken,
-        twoFactorEnabled: false
-    };
-}
+        const { title, firstName, lastName, email, password } = userData;
+        const passwordHash = await bcrypt.hash(password, 10);
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        
+        console.log('Generated verification token:', verificationToken);
+        
+        const [rows] = await pool.query('SELECT COUNT(*) as count FROM accounts');
+        const isFirstAccount = (rows as any)[0].count === 0;
+        const role = isFirstAccount ? 'Admin' : 'User';
+        
+        const [result] = await pool.query(
+            `INSERT INTO accounts 
+             (title, firstName, lastName, email, passwordHash, role, isVerified, verificationToken, twoFactorEnabled) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [title, firstName, lastName, email, passwordHash, role, false, verificationToken, false]
+        );
+        
+        const insertId = (result as any).insertId;
+        const account = await this.getById(insertId);
+        
+        return {
+            ...account,
+            verificationToken: verificationToken,
+            twoFactorEnabled: false
+        };
+    }
     
     static async getById(id: number): Promise<AccountResponse> {
-    const [rows] = await pool.query(
-        'SELECT id, title, firstName, lastName, email, role, isVerified, createdAt, profilePicture, twoFactorEnabled FROM accounts WHERE id = ?',
-        [id]
-    );
-    return (rows as any)[0];
-}
+        const [rows] = await pool.query(
+            'SELECT id, title, firstName, lastName, email, role, isVerified, createdAt, profilePicture, twoFactorEnabled FROM accounts WHERE id = ?',
+            [id]
+        );
+        return (rows as any)[0];
+    }
     
     static async getByEmail(email: string): Promise<any> {
-    const [rows] = await pool.query(
-        `SELECT id, title, firstName, lastName, email, passwordHash, role, isVerified, 
-                verificationToken, resetToken, resetTokenExpires, refreshToken, 
-                profilePicture, twoFactorSecret, twoFactorEnabled, backupCodes 
-         FROM accounts WHERE email = ?`,
-        [email]
-    );
-    return (rows as any)[0] || null;
-}
+        const [rows] = await pool.query(
+            `SELECT id, title, firstName, lastName, email, passwordHash, role, isVerified, 
+                    verificationToken, resetToken, resetTokenExpires, refreshToken, 
+                    profilePicture, twoFactorSecret, twoFactorEnabled, backupCodes 
+             FROM accounts WHERE email = ?`,
+            [email]
+        );
+        return (rows as any)[0] || null;
+    }
+    
     static async getByVerificationToken(token: string): Promise<Account | null> {
         const [rows] = await pool.query(
             'SELECT * FROM accounts WHERE verificationToken = ? AND isVerified = false',
@@ -176,12 +177,13 @@ export class AccountModel {
     }
     
     static async getAll(): Promise<AccountResponse[]> {
-    const [rows] = await pool.query(
-        'SELECT id, title, firstName, lastName, email, role, isVerified, createdAt, profilePicture FROM accounts ORDER BY id'
-    );
-    return rows as AccountResponse[];
-}
+        const [rows] = await pool.query(
+            'SELECT id, title, firstName, lastName, email, role, isVerified, createdAt, profilePicture FROM accounts ORDER BY id'
+        );
+        return rows as AccountResponse[];
+    }
     
+    // UPDATED: Added 'isVerified' field to the update method
     static async update(id: number, data: any): Promise<AccountResponse | null> {
         const fields = [];
         const values = [];
@@ -190,6 +192,7 @@ export class AccountModel {
         if (data.firstName) { fields.push('firstName = ?'); values.push(data.firstName); }
         if (data.lastName) { fields.push('lastName = ?'); values.push(data.lastName); }
         if (data.email) { fields.push('email = ?'); values.push(data.email); }
+        if (data.isVerified !== undefined) { fields.push('isVerified = ?'); values.push(data.isVerified); }
         if (data.password) {
             const passwordHash = await bcrypt.hash(data.password, 10);
             fields.push('passwordHash = ?');
