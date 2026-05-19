@@ -1,24 +1,34 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Initialize Resend with your API key
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Brevo SMTP Configuration (Works on Render, sends to ANY email)
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: false, // false for 587
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+    }
+});
 
-// Verify API key is configured
-if (!process.env.RESEND_API_KEY) {
-    console.error('❌ RESEND_API_KEY is not configured in environment variables');
-} else {
-    console.log('✅ Resend API is ready to send emails');
-}
+// Verify SMTP connection
+transporter.verify((error, success) => {
+    if (error) {
+        console.error('❌ SMTP Connection Error:', error.message);
+    } else {
+        console.log('✅ Brevo SMTP is ready to send emails to ANY email address');
+    }
+});
 
 export const sendVerificationEmail = async (email: string, token: string, name: string = 'User') => {
     const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/account/verify-email?token=${token}`;
     
     try {
-        const { data, error } = await resend.emails.send({
-            from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
+        const info = await transporter.sendMail({
+            from: `"AuthMaster" <${process.env.EMAIL_FROM || 'noreply@authmaster.com'}>`,
             to: email,
             subject: 'Verify Your Email - AuthMaster',
             html: `
@@ -62,15 +72,10 @@ export const sendVerificationEmail = async (email: string, token: string, name: 
             `
         });
         
-        if (error) {
-            console.error('❌ Resend API error:', error);
-            return false;
-        }
-        
         console.log('=========================================');
         console.log('📧 VERIFICATION EMAIL SENT');
         console.log(`✅ To: ${email}`);
-        console.log(`📝 Message ID: ${data?.id}`);
+        console.log(`📝 Message ID: ${info.messageId}`);
         console.log('=========================================\n');
         
         return true;
@@ -84,8 +89,8 @@ export const sendPasswordResetEmail = async (email: string, token: string, name:
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/account/reset-password?token=${token}`;
     
     try {
-        const { data, error } = await resend.emails.send({
-            from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
+        const info = await transporter.sendMail({
+            from: `"AuthMaster" <${process.env.EMAIL_FROM || 'noreply@authmaster.com'}>`,
             to: email,
             subject: 'Reset Your Password - AuthMaster',
             html: `
@@ -127,15 +132,10 @@ export const sendPasswordResetEmail = async (email: string, token: string, name:
             `
         });
         
-        if (error) {
-            console.error('❌ Resend API error:', error);
-            return false;
-        }
-        
         console.log('=========================================');
         console.log('📧 PASSWORD RESET EMAIL SENT');
         console.log(`✅ To: ${email}`);
-        console.log(`📝 Message ID: ${data?.id}`);
+        console.log(`📝 Message ID: ${info.messageId}`);
         console.log('=========================================\n');
         
         return true;
@@ -147,8 +147,8 @@ export const sendPasswordResetEmail = async (email: string, token: string, name:
 
 export const sendWelcomeEmail = async (email: string, name: string) => {
     try {
-        const { data, error } = await resend.emails.send({
-            from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
+        const info = await transporter.sendMail({
+            from: `"AuthMaster" <${process.env.EMAIL_FROM || 'noreply@authmaster.com'}>`,
             to: email,
             subject: 'Welcome to AuthMaster! 🎉',
             html: `
@@ -190,11 +190,6 @@ export const sendWelcomeEmail = async (email: string, name: string) => {
                 </html>
             `
         });
-        
-        if (error) {
-            console.error('❌ Resend API error:', error);
-            return false;
-        }
         
         console.log('=========================================');
         console.log('📧 WELCOME EMAIL SENT');
