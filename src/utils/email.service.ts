@@ -1,192 +1,123 @@
-import SibApiV3Sdk from '@getbrevo/brevo';
 import dotenv from 'dotenv';
+import axios from 'axios';
 
 dotenv.config();
 
-// Initialize Brevo HTTP API (uses port 443 - allowed on Render)
-let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-
-let apiKey = apiInstance.authentications['apiKey'];
-apiKey.apiKey = process.env.BREVO_API_KEY;
-
-if (!process.env.BREVO_API_KEY) {
-    console.error('❌ BREVO_API_KEY is not configured in environment variables');
-} else {
-    console.log('✅ Brevo HTTP API is ready to send emails to ANY email address');
-}
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@authmaster.com';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:4200';
 
 export const sendVerificationEmail = async (email: string, token: string, name: string = 'User') => {
-    const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/account/verify-email?token=${token}`;
+    const verificationUrl = `${FRONTEND_URL}/account/verify-email?token=${token}`;
     
-    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
-    sendSmtpEmail.subject = 'Verify Your Email - AuthMaster';
-    sendSmtpEmail.to = [{ email: email, name: name }];
-    sendSmtpEmail.from = { email: process.env.EMAIL_FROM || 'noreply@authmaster.com', name: 'AuthMaster' };
-    sendSmtpEmail.htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Verify Your Email</title>
-            <style>
-                body { font-family: 'Arial', sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-                .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-                .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
-                .content { padding: 40px 30px; text-align: center; }
-                .button { display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 25px; margin: 20px 0; font-weight: bold; }
-                .button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102,126,234,0.4); }
-                .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #6c757d; }
-                .link { word-break: break-all; font-size: 12px; color: #666; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Verify Your Email</h1>
-                </div>
-                <div class="content">
-                    <h2>Hello ${name}!</h2>
+    const emailData = {
+        sender: { email: EMAIL_FROM, name: 'AuthMaster' },
+        to: [{ email: email, name: name }],
+        subject: 'Verify Your Email - AuthMaster',
+        htmlContent: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Verify Your Email</title>
+                <style>
+                    body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+                    .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; padding: 20px; }
+                    .button { display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 25px; margin: 20px 0; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2 style="color: #333;">Verify Your Email</h2>
+                    <p>Hi <strong>${name}</strong>,</p>
                     <p>Thank you for registering with <strong>AuthMaster</strong>. Please verify your email address to complete your registration.</p>
-                    <a href="${verificationUrl}" class="button">Verify Email Address</a>
-                    <p>Or copy this link:</p>
-                    <div class="link">${verificationUrl}</div>
-                    <p style="margin-top: 20px; font-size: 12px; color: #999;">This link will expire in 24 hours.</p>
+                    <div style="text-align: center;">
+                        <a href="${verificationUrl}" class="button">Verify Email Address</a>
+                    </div>
+                    <p style="margin-top: 20px;">Or copy this link: <br><small style="word-break: break-all;">${verificationUrl}</small></p>
+                    <p style="font-size: 12px; color: #999;">This link will expire in 24 hours.</p>
+                    <hr>
+                    <p style="font-size: 12px; color: #999;">If you didn't create an account, please ignore this email.</p>
                 </div>
-                <div class="footer">
-                    <p>© ${new Date().getFullYear()} AuthMaster. All rights reserved.</p>
-                    <p>If you didn't create an account, please ignore this email.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-    `;
+            </body>
+            </html>
+        `
+    };
     
     try {
-        const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
+        const response = await axios.post('https://api.brevo.com/v3/smtp/email', emailData, {
+            headers: {
+                'Content-Type': 'application/json',
+                'api-key': BREVO_API_KEY
+            }
+        });
+        
         console.log('=========================================');
         console.log('📧 VERIFICATION EMAIL SENT');
         console.log(`✅ To: ${email}`);
-        console.log(`📝 Message ID: ${data.messageId}`);
+        console.log(`📝 Message ID: ${response.data.messageId}`);
         console.log('=========================================\n');
         return true;
-    } catch (error) {
-        console.error('❌ Email send error:', error);
+    } catch (error: any) {
+        console.error('❌ Email send error:', error.response?.data || error.message);
         return false;
     }
 };
 
 export const sendPasswordResetEmail = async (email: string, token: string, name: string = 'User') => {
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/account/reset-password?token=${token}`;
+    const resetUrl = `${FRONTEND_URL}/account/reset-password?token=${token}`;
     
-    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
-    sendSmtpEmail.subject = 'Reset Your Password - AuthMaster';
-    sendSmtpEmail.to = [{ email: email, name: name }];
-    sendSmtpEmail.from = { email: process.env.EMAIL_FROM || 'noreply@authmaster.com', name: 'AuthMaster' };
-    sendSmtpEmail.htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Reset Your Password</title>
-            <style>
-                body { font-family: 'Arial', sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-                .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-                .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
-                .content { padding: 40px 30px; text-align: center; }
-                .button { display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 25px; margin: 20px 0; font-weight: bold; }
-                .warning { background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; color: #856404; border-left: 4px solid #ffc107; }
-                .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #6c757d; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Reset Your Password</h1>
-                </div>
-                <div class="content">
-                    <h2>Hello ${name}!</h2>
-                    <p>We received a request to reset your password. Click the button below to create a new password.</p>
-                    <a href="${resetUrl}" class="button">Reset Password</a>
-                    <div class="warning">
-                        <strong>⚠️ This link will expire in 1 hour.</strong>
-                    </div>
-                    <p>If you didn't request this, please ignore this email and your password will remain unchanged.</p>
-                </div>
-                <div class="footer">
-                    <p>© ${new Date().getFullYear()} AuthMaster. All rights reserved.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-    `;
+    const emailData = {
+        sender: { email: EMAIL_FROM, name: 'AuthMaster' },
+        to: [{ email: email, name: name }],
+        subject: 'Reset Your Password - AuthMaster',
+        htmlContent: `
+            <h1>Reset Your Password</h1>
+            <p>Hi ${name},</p>
+            <p>Click <a href="${resetUrl}">here</a> to reset your password.</p>
+            <p>This link expires in 1 hour.</p>
+        `
+    };
     
     try {
-        await apiInstance.sendTransacEmail(sendSmtpEmail);
-        console.log('=========================================');
-        console.log('📧 PASSWORD RESET EMAIL SENT');
-        console.log(`✅ To: ${email}`);
-        console.log('=========================================\n');
+        await axios.post('https://api.brevo.com/v3/smtp/email', emailData, {
+            headers: {
+                'Content-Type': 'application/json',
+                'api-key': BREVO_API_KEY
+            }
+        });
+        console.log('✅ Password reset email sent to:', email);
         return true;
-    } catch (error) {
-        console.error('❌ Password reset email error:', error);
+    } catch (error: any) {
+        console.error('❌ Password reset email error:', error.response?.data || error.message);
         return false;
     }
 };
 
 export const sendWelcomeEmail = async (email: string, name: string) => {
-    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
-    sendSmtpEmail.subject = 'Welcome to AuthMaster! 🎉';
-    sendSmtpEmail.to = [{ email: email, name: name }];
-    sendSmtpEmail.from = { email: process.env.EMAIL_FROM || 'noreply@authmaster.com', name: 'AuthMaster' };
-    sendSmtpEmail.htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Welcome to AuthMaster</title>
-            <style>
-                body { font-family: 'Arial', sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-                .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-                .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
-                .content { padding: 40px 30px; text-align: center; }
-                .features { display: flex; justify-content: space-around; margin: 30px 0; }
-                .feature { text-align: center; flex: 1; }
-                .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #6c757d; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Welcome to AuthMaster! 🎉</h1>
-                </div>
-                <div class="content">
-                    <h2>Hello ${name}!</h2>
-                    <p>Thank you for joining AuthMaster. We're excited to have you on board!</p>
-                    <div class="features">
-                        <div class="feature">🔒 Secure Authentication</div>
-                        <div class="feature">🚀 Fast & Reliable</div>
-                        <div class="feature">💪 Powerful Features</div>
-                    </div>
-                    <p>You can now login and start using all the features of our platform.</p>
-                </div>
-                <div class="footer">
-                    <p>© ${new Date().getFullYear()} AuthMaster. All rights reserved.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-    `;
+    const emailData = {
+        sender: { email: EMAIL_FROM, name: 'AuthMaster' },
+        to: [{ email: email, name: name }],
+        subject: 'Welcome to AuthMaster! 🎉',
+        htmlContent: `
+            <h1>Welcome to AuthMaster! 🎉</h1>
+            <p>Hi ${name},</p>
+            <p>Your account has been successfully created.</p>
+            <p>You can now login and start using our services.</p>
+        `
+    };
     
     try {
-        await apiInstance.sendTransacEmail(sendSmtpEmail);
-        console.log('=========================================');
-        console.log('📧 WELCOME EMAIL SENT');
-        console.log(`✅ To: ${email}`);
-        console.log('=========================================\n');
+        await axios.post('https://api.brevo.com/v3/smtp/email', emailData, {
+            headers: {
+                'Content-Type': 'application/json',
+                'api-key': BREVO_API_KEY
+            }
+        });
+        console.log('✅ Welcome email sent to:', email);
         return true;
-    } catch (error) {
-        console.error('❌ Welcome email error:', error);
+    } catch (error: any) {
+        console.error('❌ Welcome email error:', error.response?.data || error.message);
         return false;
     }
 };
