@@ -1,130 +1,122 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
-import { EmailTemplateService } from '../services/emailTemplate.service';
 
 dotenv.config();
 
-// Create transporter for real emails (Ethereal) with Render-optimized settings
+// Resend SMTP Configuration
 const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
+    host: 'smtp.resend.com',
+    port: 587,
     secure: false,
     auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-    },
-    // Add these settings for Render compatibility
-    tls: {
-        rejectUnauthorized: false
-    },
-    connectionTimeout: 30000,
-    greetingTimeout: 30000,
-    socketTimeout: 30000,
-    debug: true
+        user: 'resend',
+        pass: process.env.RESEND_API_KEY
+    }
 });
 
-// Retry helper function
-const sendWithRetry = async (fn: () => Promise<any>, retries = 3): Promise<any> => {
-    for (let i = 0; i < retries; i++) {
-        try {
-            return await fn();
-        } catch (error) {
-            console.log(`📧 Email attempt ${i + 1} failed, retrying...`);
-            if (i === retries - 1) throw error;
-            await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-    }
-};
-
-// Verify SMTP connection on startup
+// Verify connection
 transporter.verify((error, success) => {
     if (error) {
-        console.error('❌ SMTP Connection Error:', error.message);
-        console.log('⚠️ Email sending may not work, but verification links will be logged below');
+        console.error('❌ SMTP Connection Error:', error);
     } else {
-        console.log('✅ SMTP Server is ready to send emails');
-        console.log(`📧 Using Ethereal: ${process.env.SMTP_USER}`);
+        console.log('✅ Resend SMTP is ready to send emails');
     }
 });
 
 export const sendVerificationEmail = async (email: string, token: string, name: string = 'User') => {
     const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/account/verify-email?token=${token}`;
-    const htmlTemplate = EmailTemplateService.getVerificationEmailTemplate(name, verificationUrl);
-    
-    // Always log the verification link (critical for debugging when email fails)
-    console.log('=========================================');
-    console.log('📧 VERIFICATION LINK (Save this to verify)');
-    console.log(`To: ${email}`);
-    console.log(`Link: ${verificationUrl}`);
-    console.log('=========================================\n');
     
     try {
-        const info = await sendWithRetry(() => transporter.sendMail({
-            from: `"AuthMaster" <${process.env.EMAIL_FROM || 'noreply@authmaster.com'}>`,
+        const info = await transporter.sendMail({
+            from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
             to: email,
             subject: 'Verify Your Email - AuthMaster',
-            html: htmlTemplate
-        }));
+            html: `
+                <!DOCTYPE html>
+                <html>
+                <head><meta charset="UTF-8"><title>Verify Email</title></head>
+                <body style="font-family: Arial, sans-serif;">
+                    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                        <h2 style="color: #333;">Verify Your Email</h2>
+                        <p>Hi ${name},</p>
+                        <p>Thank you for registering with AuthMaster. Please verify your email address to complete your registration.</p>
+                        <a href="${verificationUrl}" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 5px;">Verify Email</a>
+                        <p style="margin-top: 20px;">Or copy this link: <br><small>${verificationUrl}</small></p>
+                        <p>This link will expire in 24 hours.</p>
+                    </div>
+                </body>
+                </html>
+            `
+        });
         
         console.log('=========================================');
-        console.log('📧 VERIFICATION EMAIL SENT SUCCESSFULLY');
+        console.log('📧 VERIFICATION EMAIL SENT');
         console.log(`✅ To: ${email}`);
-        console.log(`🔗 Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+        console.log(`📝 Message ID: ${info.messageId}`);
         console.log('=========================================\n');
         
         return true;
     } catch (error) {
-        console.error('❌ Email send failed, but verification link is above for manual testing');
+        console.error('❌ Email send error:', error);
         return false;
     }
 };
 
 export const sendPasswordResetEmail = async (email: string, token: string, name: string = 'User') => {
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/account/reset-password?token=${token}`;
-    const htmlTemplate = EmailTemplateService.getPasswordResetEmailTemplate(name, resetUrl);
-    
-    console.log('=========================================');
-    console.log('📧 PASSWORD RESET LINK');
-    console.log(`To: ${email}`);
-    console.log(`Link: ${resetUrl}`);
-    console.log('=========================================\n');
     
     try {
-        const info = await sendWithRetry(() => transporter.sendMail({
-            from: `"AuthMaster" <${process.env.EMAIL_FROM || 'noreply@authmaster.com'}>`,
+        const info = await transporter.sendMail({
+            from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
             to: email,
             subject: 'Reset Your Password - AuthMaster',
-            html: htmlTemplate
-        }));
+            html: `
+                <!DOCTYPE html>
+                <html>
+                <head><meta charset="UTF-8"><title>Reset Password</title></head>
+                <body style="font-family: Arial, sans-serif;">
+                    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                        <h2 style="color: #333;">Reset Your Password</h2>
+                        <p>Hi ${name},</p>
+                        <p>We received a request to reset your password. Click the button below to create a new password.</p>
+                        <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 5px;">Reset Password</a>
+                        <p style="margin-top: 20px;">This link will expire in 1 hour.</p>
+                        <p>If you didn't request this, please ignore this email.</p>
+                    </div>
+                </body>
+                </html>
+            `
+        });
         
-        console.log(`✅ Password reset email sent! Preview: ${nodemailer.getTestMessageUrl(info)}`);
+        console.log('=========================================');
+        console.log('📧 PASSWORD RESET EMAIL SENT');
+        console.log(`✅ To: ${email}`);
+        console.log('=========================================\n');
+        
         return true;
     } catch (error) {
-        console.error('❌ Password reset email failed, link above for manual use');
+        console.error('❌ Email send error:', error);
         return false;
     }
 };
 
 export const sendWelcomeEmail = async (email: string, name: string) => {
-    const htmlTemplate = EmailTemplateService.getWelcomeEmailTemplate(name);
-    
     try {
-        const info = await sendWithRetry(() => transporter.sendMail({
-            from: `"AuthMaster" <${process.env.EMAIL_FROM || 'noreply@authmaster.com'}>`,
+        await transporter.sendMail({
+            from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
             to: email,
             subject: 'Welcome to AuthMaster! 🎉',
-            html: htmlTemplate
-        }));
+            html: `
+                <h1>Welcome to AuthMaster! 🎉</h1>
+                <p>Hi ${name},</p>
+                <p>Your account has been successfully created. You can now login and start using our services.</p>
+            `
+        });
         
-        console.log('=========================================');
-        console.log('📧 WELCOME EMAIL SENT');
-        console.log(`✅ To: ${email}`);
-        console.log(`🔗 Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
-        console.log('=========================================\n');
-        
+        console.log('✅ Welcome email sent');
         return true;
     } catch (error) {
-        console.error('❌ Welcome email failed');
+        console.error('❌ Welcome email error:', error);
         return false;
     }
 };
